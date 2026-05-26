@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Clock aur Date ke liye
-import 'package:provider/provider.dart';
-import '../viewmodels/app_state_viewmodel.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/intl.dart';
+import '../services/split_service.dart';
+import 'group_details_view.dart';
 
 class DashboardView extends StatefulWidget {
   const DashboardView({super.key});
@@ -11,271 +12,470 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-  int _selectedIndex = 0; // Bottom nav index
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  int _currentTab = 0;
+
+  // Local state for profile details
+  String _userName = 'Navneet';
+  String _userEmail = 'navneet@gmail.com';
+  String? _userPhotoUrl;
+  String _currentDate = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDate = DateFormat('EEEE, MMM dd, yyyy').format(DateTime.now());
+    _loadUserData();
+  }
+
+  // Real data fetch from existing Google Sign-In instance
+  void _loadUserData() {
+    final GoogleSignInAccount? account = _googleSignIn.currentUser;
+    if (account != null) {
+      setState(() {
+        _userName = account.displayName ?? 'Navneet';
+        _userEmail = account.email;
+        _userPhotoUrl = account.photoUrl;
+      });
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    try {
+      await _googleSignIn.signOut();
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    } catch (error) {
+      print("Logout error: $error");
+    }
+  }
+
+  void _showCreateGroupDialog() {
+    final nameController = TextEditingController();
+    final membersController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22252D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Create Split Group', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Group Name',
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6FE9CD))),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: membersController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Members (Comma separated)',
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6FE9CD))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6FE9CD),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                List<String> mems = membersController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+                setState(() {
+                  SplitService.addGroup(nameController.text.trim(), mems);
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Create', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // Real-time Date format
-    final String formattedDate = DateFormat('EEEE, MMM d, yyyy').format(DateTime.now());
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1113), // Exact Deep Carbon Background from Image
+      backgroundColor: const Color(0xFF181B22),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              
-              // 1. HEADER SECTION (Greeting & Profile)
-              Row(
+        child: Column(
+          children: [
+            // Top Custom Header (Real Name & Real Date)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RichText(
-                        text: const TextSpan(
-                          style: TextStyle(fontSize: 24, color: Colors.white),
+                        text: TextSpan(
+                          text: 'Hey, ',
+                          style: const TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.w400),
                           children: [
-                            TextSpan(text: "Hey, "),
-                            TextSpan(text: "User!", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00D2FF))),
+                            TextSpan(
+                              text: '$_userName!',
+                              style: const TextStyle(color: Color(0xFF6FE9CD), fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        formattedDate,
-                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+                        _currentDate,
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
                       ),
                     ],
                   ),
-                  // Top Right Menu Grid Icon
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 26),
+                  // User Profile Avatar on Top Right
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: const Color(0xFF22252D),
+                    backgroundImage: _userPhotoUrl != null ? NetworkImage(_userPhotoUrl!) : null,
+                    child: _userPhotoUrl == null ? Text(_userName[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6FE9CD), fontWeight: FontWeight.bold)) : null,
                   ),
                 ],
               ),
-              const SizedBox(height: 30),
+            ),
 
-              // 2. FEATURED SUMMARY CARD (Replaces Weather Card)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.white.withOpacity(0.12), Colors.white.withOpacity(0.05)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Cloud Syncing", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 4),
-                            Text("Secure, Global Framework", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
-                          ],
-                        ),
-                        const Text("28°", style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w300)),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    // Mini Stats Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildMiniStat("98%", "Accuracy", Icons.shutter_speed_rounded, Colors.greenAccent),
-                        _buildMiniStat("65%", "Storage", Icons.cloud_done_rounded, Colors.blueAccent),
-                        _buildMiniStat("100%", "Security", Icons.security_rounded, Colors.orangeAccent),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // 3. HORIZONTAL TABS (All Tools, Finance, etc.)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildTab("All Tools", true),
-                    _buildTab("Financial", false),
-                    _buildTab("Quick Utilities", false),
-                    _buildTab("Analytics", false),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
-
-              // 4. SMART FEATURE GRID (Device Style Cards)
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.85,
+            // Tabs Layout Views Switcher
+            Expanded(
+              child: IndexedStack(
+                index: _currentTab,
                 children: [
-                  _buildSmartCard(
-                    title: "Group Expense",
-                    status: "4 Active Splits",
-                    icon: Icons.group_add_rounded,
-                    color: Colors.tealAccent,
-                    isOn: true,
-                  ),
-                  _buildSmartCard(
-                    title: "Ledger Book",
-                    status: "2 Pending",
-                    icon: Icons.account_balance_wallet_rounded,
-                    color: Colors.blueAccent,
-                    isOn: false,
-                  ),
-                  _buildSmartCard(
-                    title: "Quick Math",
-                    status: "Calculator",
-                    icon: Icons.calculate_rounded,
-                    color: Colors.orangeAccent,
-                    isOn: true,
-                  ),
-                  _buildSmartCard(
-                    title: "Analytics",
-                    status: "Offline",
-                    icon: Icons.bar_chart_rounded,
-                    color: Colors.purpleAccent,
-                    isOn: false,
-                  ),
+                  _buildHomeTab(),
+                  _buildSplitwiseLedgerTab(),
+                  _buildSettingsTab(),
+                  _buildAccountTab(_userName, _userEmail, _userPhotoUrl),
                 ],
               ),
-              const SizedBox(height: 100), // Space for bottom nav
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      
-      // 5. MODERN FLOATING BOTTOM NAVIGATION
-      bottomNavigationBar: _buildBottomNav(),
+      // Bottom Navigation Bar
+      bottomNavigationBar: Container(
+        height: 70,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1C1F26),
+          border: Border(top: BorderSide(color: Color(0xFF2C303B), width: 0.5)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildBottomNavIcon(Icons.home_filled, 0),
+            _buildBottomNavIcon(Icons.pie_chart_rounded, 1),
+            _buildBottomNavIcon(Icons.settings_rounded, 2),
+            _buildBottomNavIcon(Icons.person_rounded, 3),
+          ],
+        ),
+      ),
     );
   }
 
-  // Mini Stat Builder for the Top Card
-  Widget _buildMiniStat(String value, String label, IconData icon, Color color) {
-    return Column(
+  // --- TAB 1: REAL HOME DASHBOARD WITH SPLIT FEATURES ---
+  Widget _buildHomeTab() {
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(height: 6),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+        // Premium Linear Gradient Weather Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFB9F3E8), Color(0xFF76EDD3)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.wb_cloudy_rounded, color: Colors.white, size: 32),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text('Sunny Intervals', style: TextStyle(color: Color(0xFF1E3A34), fontSize: 20, fontWeight: FontWeight.bold)),
+                          Text('Punjab, India', style: TextStyle(color: Color(0xFF3B6B60), fontSize: 13, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Text('32°', style: TextStyle(color: Color(0xFF1E3A34), fontSize: 36, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _buildWeatherMetrics(),
+              )
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Split Tiles Grid Layout (Exact Design Preserved)
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.1,
+          children: [
+            _buildSplitFeatureCard('Quick Split', 'Instant Bill Split', Icons.bolt_rounded, () => _showCreateGroupDialog()),
+            _buildSplitFeatureCard('Active Groups', '${SplitService.activeGroups.length} Groups Live', Icons.group_rounded, () => setState(() => _currentTab = 1)),
+            _buildSplitFeatureCard('Settle Requests', 'No pending alerts', Icons.handshake_rounded, () => setState(() => _currentTab = 1)),
+            _buildSplitFeatureCard('Total Expenses', 'Track logs & history', Icons.analytics_rounded, () => setState(() => _currentTab = 2)),
+          ],
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }
 
-  // Tab Builder
-  Widget _buildTab(String label, bool isSelected) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF00D2FF) : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
+  // --- TAB 2: GOOGLE PAY STYLE SPLITWISE LEDGER TAB ---
+  Widget _buildSplitwiseLedgerTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Split Summary (G-Pay Style)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF6FE9CD), size: 28),
+                onPressed: _showCreateGroupDialog,
+              )
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: SplitService.activeGroups.length,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemBuilder: (context, index) {
+              final group = SplitService.activeGroups[index];
+              final totalBalances = SplitService.calculateBalances(group);
+              double userNet = totalBalances['You'] ?? 0.0;
 
-  // Smart Feature Card Builder (The "AC/TV" style cards)
-  Widget _buildSmartCard({required String title, required String status, required IconData icon, required Color color, required bool isOn}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isOn ? color.withOpacity(0.1) : Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isOn ? color.withOpacity(0.3) : Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: isOn ? color : Colors.white38, size: 32),
-              Icon(Icons.wifi, color: isOn ? color : Colors.white12, size: 16),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(status, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(isOn ? "ON" : "OFF", style: TextStyle(color: isOn ? Colors.white : Colors.white24, fontWeight: FontWeight.bold, fontSize: 12)),
-              Transform.scale(
-                scale: 0.7,
-                child: Switch(
-                  value: isOn,
-                  activeColor: color,
-                  onChanged: (val) {},
+              return Card(
+                color: const Color(0xFF22252D),
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFF181B22),
+                    child: Text(group.name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6FE9CD), fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(group.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  subtitle: Text('Members: ${group.members.join(", ")}', style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        userNet >= 0 ? '+₹${userNet.toStringAsFixed(0)}' : '-₹${userNet.abs().toStringAsFixed(0)}',
+                        style: TextStyle(
+                          color: userNet >= 0 ? const Color(0xFF6FE9CD) : Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        userNet >= 0 ? 'You get back' : 'You owe',
+                        style: const TextStyle(color: Colors.grey, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => GroupDetailsView(group: group)),
+                    ).then((_) => setState(() {}));
+                  },
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // Modern Bottom Navigation Bar
-  Widget _buildBottomNav() {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.symmetric(vertical: 15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1C1E),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, -5))],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+  // --- TAB 3: SPLITWISE PRESETS SETTINGS TAB ---
+  Widget _buildSettingsTab() {
+    final settingsItems = [
+      {'title': 'Theme Settings', 'sub': 'Dark Mode & Custom Accents', 'icon': Icons.palette_rounded},
+      {'title': 'Split History', 'sub': 'Review all past settlements', 'icon': Icons.history_toggle_off_rounded},
+      {'title': 'Group Management', 'sub': 'Add, edit, or archive members', 'icon': Icons.group_add_rounded},
+      {'title': 'Default Currency', 'sn': 'INR (₹) Settings', 'icon': Icons.currency_rupee_rounded},
+      {'title': 'Payment Reminders', 'sub': 'Auto ping pending debts via UPI', 'icon': Icons.notifications_active_rounded},
+    ];
+
+    return ListView.builder(
+      itemCount: settingsItems.length,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      itemBuilder: (context, index) {
+        final item = settingsItems[index];
+        return Card(
+          color: const Color(0xFF22252D),
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: ListTile(
+            leading: Icon(item['icon'] as IconData, color: const Color(0xFF6FE9CD)),
+            title: Text(item['title'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            subtitle: Text((item['sub'] ?? item['sn']) as String, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 14),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${item['title']} clicked!'), backgroundColor: const Color(0xFF22252D)),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // --- TAB 4: REAL PROFILE ACCOUNT DETAILED PANEL ---
+  Widget _buildAccountTab(String name, String email, String? photoUrl) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _navIcon(Icons.home_filled, 0),
-          _navIcon(Icons.history_rounded, 1),
-          _navIcon(Icons.settings_suggest_rounded, 2),
-          _navIcon(Icons.person_outline_rounded, 3),
+          const SizedBox(height: 20),
+          CircleAvatar(
+            radius: 55,
+            backgroundColor: const Color(0xFF22252D),
+            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+            child: photoUrl == null ? Text(name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6FE9CD), fontSize: 36, fontWeight: FontWeight.bold)) : null,
+          ),
+          const SizedBox(height: 16),
+          Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(email, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          const SizedBox(height: 30),
+          const Divider(color: Color(0xFF2C303B)),
+          const Spacer(),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent.withOpacity(0.15),
+              foregroundColor: Colors.redAccent,
+              side: const BorderSide(color: Colors.redAccent, width: 1),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              minimumSize: const Size(double.infinity, 50),
+            ),
+            onPressed: _handleLogout,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Logout Google Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _navIcon(IconData icon, int index) {
-    bool isSelected = _selectedIndex == index;
+  // Auxiliary Layout Helpers
+  List<Widget> _buildWeatherMetrics() {
+    final metrics = [
+      {'val': '34°', 'label': 'Sensible'},
+      {'val': '58%', 'label': 'Humidity'},
+      {'val': '4.1', 'label': 'Wind m/s'},
+      {'val': '1006hpa', 'label': 'Pressure'},
+    ];
+    return metrics.map((m) {
+      return Column(
+        children: [
+          Text(m['val']!, style: const TextStyle(color: Color(0xFF1E3A34), fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 2),
+          Text(m['label']!, style: const TextStyle(color: Color(0xFF4C7E73), fontSize: 12, fontWeight: FontWeight.w500)),
+        ],
+      );
+    }).toList();
+  }
+
+  Widget _buildSplitFeatureCard(String title, String subtitle, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF22252D),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: const Color(0xFF6FE9CD), size: 28),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.grey, size: 16),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavIcon(IconData icon, int tabIndex) {
+    bool isSelected = _currentTab == tabIndex;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      child: Icon(icon, color: isSelected ? const Color(0xFF00D2FF) : Colors.white24, size: 28),
+      onTap: () => setState(() => _currentTab = tabIndex),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: isSelected ? const Color(0xFF6FE9CD) : Colors.grey.shade600, size: 28),
+          if (isSelected) ...[
+            const SizedBox(height: 4),
+            Container(width: 4, height: 4, decoration: const BoxDecoration(color: Color(0xFF6FE9CD), shape: BoxShape.circle))
+          ]
+        ],
+      ),
     );
   }
 }
