@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dashboard_view.dart';
-import 'signup_view.dart'; // Imported the new registration module
+import 'signup_view.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -14,9 +15,15 @@ class _LoginViewState extends State<LoginView> {
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
   String? _errorMessage;
+  bool _isLoading = false;
 
   final Color backgroundColor = const Color(0xFF0F1113);
   final Color accentBlue = const Color(0xFF00D2FF);
+
+  // Class-level clean instantiation fallback for target compilers
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: <String>['email'],
+  );
 
   void _handleLogin() {
     final email = _emailController.text.trim();
@@ -32,6 +39,36 @@ class _LoginViewState extends State<LoginView> {
       setState(() {
         _errorMessage = 'Invalid credentials. Hint: admin@utilixa.com / admin123';
       });
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Accessing standard sign-in channel mapping directly
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      
+      if (googleUser != null) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DashboardView()),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Google Authentication failed. Please try again.';
+      });
+      print('Google Sign-In Error: $error');
     }
   }
 
@@ -172,35 +209,69 @@ class _LoginViewState extends State<LoginView> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 35),
+                const SizedBox(height: 30),
 
-                // Updated text string configuration to matching corporate standard token
-                Container(
-                  width: double.infinity,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: accentBlue.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 4))
+                _isLoading 
+                ? const CircularProgressIndicator(color: Color(0xFF00D2FF))
+                : Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: accentBlue.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 4))
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentBlue,
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          child: const Text(
+                            'LOG IN',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      Container(
+                        width: double.infinity,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.white.withOpacity(0.04),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: OutlinedButton(
+                          onPressed: _handleGoogleSignIn,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.g_mobiledata_rounded, size: 30, color: Colors.white),
+                              const SizedBox(width: 4),
+                              Text(
+                                'CONTINUE WITH GOOGLE',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.9), letterSpacing: 0.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  child: ElevatedButton(
-                    onPressed: _handleLogin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentBlue,
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text(
-                      'LOG IN',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 28),
 
-                // Interactive registration gateway anchor
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
