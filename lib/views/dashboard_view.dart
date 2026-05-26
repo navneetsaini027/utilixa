@@ -15,8 +15,7 @@ class _DashboardViewState extends State<DashboardView> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   int _currentTab = 0;
 
-  // Local state for profile details
-  String _userName = 'Navneet';
+  String _userName = 'Navneet Saini';
   String _userEmail = 'navneet@gmail.com';
   String? _userPhotoUrl;
   String _currentDate = '';
@@ -25,17 +24,21 @@ class _DashboardViewState extends State<DashboardView> {
   void initState() {
     super.initState();
     _currentDate = DateFormat('EEEE, MMM dd, yyyy').format(DateTime.now());
-    _loadUserData();
+    _syncGoogleAccount();
   }
 
-  // Real data fetch from existing Google Sign-In instance
-  void _loadUserData() {
-    final GoogleSignInAccount? account = _googleSignIn.currentUser;
-    if (account != null) {
+  // Pure Null-Safe execution using conditional member access directly
+  void _syncGoogleAccount() async {
+    GoogleSignInAccount? currentAccount = _googleSignIn.currentUser;
+    if (currentAccount == null) {
+      currentAccount = await _googleSignIn.signInSilently();
+    }
+    
+    if (currentAccount != null) {
       setState(() {
-        _userName = account.displayName ?? 'Navneet';
-        _userEmail = account.email;
-        _userPhotoUrl = account.photoUrl;
+        _userName = currentAccount?.displayName ?? 'Navneet Saini';
+        _userEmail = currentAccount?.email ?? 'navneet@gmail.com';
+        _userPhotoUrl = currentAccount?.photoUrl;
       });
     }
   }
@@ -113,6 +116,97 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
+  void _showQuickSplitDialog() {
+    final amountController = TextEditingController();
+    final descController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22252D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Quick Split Bill', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: descController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Bill Description (e.g., Dinner)',
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Amount (₹)',
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6FE9CD)),
+            onPressed: () {
+              final amt = double.tryParse(amountController.text) ?? 0;
+              final desc = descController.text.trim();
+              if (amt > 0 && desc.isNotEmpty) {
+                Navigator.pop(context);
+                _showGroupSelectionForQuickSplit(desc, amt);
+              }
+            },
+            child: const Text('Next', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGroupSelectionForQuickSplit(String description, double amount) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22252D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Select Target Group', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: SplitService.activeGroups.length,
+            itemBuilder: (context, index) {
+              final group = SplitService.activeGroups[index];
+              return ListTile(
+                leading: const Icon(Icons.group_rounded, color: Color(0xFF6FE9CD)),
+                title: Text(group.name, style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() {
+                    SplitService.addExpense(group.id, description, amount, 'You');
+                  });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('₹$amount added to ${group.name} successfully!'),
+                      backgroundColor: const Color(0xFF1C1F26),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,7 +214,6 @@ class _DashboardViewState extends State<DashboardView> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Custom Header (Real Name & Real Date)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
               child: Row(
@@ -142,13 +235,9 @@ class _DashboardViewState extends State<DashboardView> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _currentDate,
-                        style: const TextStyle(color: Colors.grey, fontSize: 14),
-                      ),
+                      Text(_currentDate, style: const TextStyle(color: Colors.grey, fontSize: 14)),
                     ],
                   ),
-                  // User Profile Avatar on Top Right
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: const Color(0xFF22252D),
@@ -158,8 +247,6 @@ class _DashboardViewState extends State<DashboardView> {
                 ],
               ),
             ),
-
-            // Tabs Layout Views Switcher
             Expanded(
               child: IndexedStack(
                 index: _currentTab,
@@ -167,14 +254,13 @@ class _DashboardViewState extends State<DashboardView> {
                   _buildHomeTab(),
                   _buildSplitwiseLedgerTab(),
                   _buildSettingsTab(),
-                  _buildAccountTab(_userName, _userEmail, _userPhotoUrl),
+                  _buildAccountTab(),
                 ],
               ),
             ),
           ],
         ),
       ),
-      // Bottom Navigation Bar
       bottomNavigationBar: Container(
         height: 70,
         decoration: const BoxDecoration(
@@ -194,13 +280,11 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // --- TAB 1: REAL HOME DASHBOARD WITH SPLIT FEATURES ---
   Widget _buildHomeTab() {
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       children: [
-        // Premium Linear Gradient Weather Card
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -241,8 +325,6 @@ class _DashboardViewState extends State<DashboardView> {
           ),
         ),
         const SizedBox(height: 24),
-
-        // Split Tiles Grid Layout (Exact Design Preserved)
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -251,7 +333,7 @@ class _DashboardViewState extends State<DashboardView> {
           mainAxisSpacing: 16,
           childAspectRatio: 1.1,
           children: [
-            _buildSplitFeatureCard('Quick Split', 'Instant Bill Split', Icons.bolt_rounded, () => _showCreateGroupDialog()),
+            _buildSplitFeatureCard('Quick Split', 'Instant Bill Split', Icons.bolt_rounded, () => _showQuickSplitDialog()),
             _buildSplitFeatureCard('Active Groups', '${SplitService.activeGroups.length} Groups Live', Icons.group_rounded, () => setState(() => _currentTab = 1)),
             _buildSplitFeatureCard('Settle Requests', 'No pending alerts', Icons.handshake_rounded, () => setState(() => _currentTab = 1)),
             _buildSplitFeatureCard('Total Expenses', 'Track logs & history', Icons.analytics_rounded, () => setState(() => _currentTab = 2)),
@@ -262,7 +344,6 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // --- TAB 2: GOOGLE PAY STYLE SPLITWISE LEDGER TAB ---
   Widget _buildSplitwiseLedgerTab() {
     return Column(
       children: [
@@ -333,7 +414,6 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // --- TAB 3: SPLITWISE PRESETS SETTINGS TAB ---
   Widget _buildSettingsTab() {
     final settingsItems = [
       {'title': 'Theme Settings', 'sub': 'Dark Mode & Custom Accents', 'icon': Icons.palette_rounded},
@@ -357,19 +437,14 @@ class _DashboardViewState extends State<DashboardView> {
             title: Text(item['title'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             subtitle: Text((item['sub'] ?? item['sn']) as String, style: const TextStyle(color: Colors.grey, fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 14),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${item['title']} clicked!'), backgroundColor: const Color(0xFF22252D)),
-              );
-            },
+            onTap: () {},
           ),
         );
       },
     );
   }
 
-  // --- TAB 4: REAL PROFILE ACCOUNT DETAILED PANEL ---
-  Widget _buildAccountTab(String name, String email, String? photoUrl) {
+  Widget _buildAccountTab() {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -379,13 +454,13 @@ class _DashboardViewState extends State<DashboardView> {
           CircleAvatar(
             radius: 55,
             backgroundColor: const Color(0xFF22252D),
-            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
-            child: photoUrl == null ? Text(name[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6FE9CD), fontSize: 36, fontWeight: FontWeight.bold)) : null,
+            backgroundImage: _userPhotoUrl != null ? NetworkImage(_userPhotoUrl!) : null,
+            child: _userPhotoUrl == null ? Text(_userName[0].toUpperCase(), style: const TextStyle(color: Color(0xFF6FE9CD), fontSize: 36, fontWeight: FontWeight.bold)) : null,
           ),
           const SizedBox(height: 16),
-          Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(_userName, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Text(email, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          Text(_userEmail, style: const TextStyle(color: Colors.grey, fontSize: 14)),
           const SizedBox(height: 30),
           const Divider(color: Color(0xFF2C303B)),
           const Spacer(),
@@ -408,7 +483,6 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // Auxiliary Layout Helpers
   List<Widget> _buildWeatherMetrics() {
     final metrics = [
       {'val': '34°', 'label': 'Sensible'},
