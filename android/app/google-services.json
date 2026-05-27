@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "383903721164",
+    "project_id": "utilixa-6ca39",
+    "storage_bucket": "utilixa-6ca39.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:383903721164:android:3b13505e776a1da085c469",
+        "android_client_info": {
+          "package_name": "com.example.utilixa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhQHDDxCOVLpYi8ouiTys_OYF0j_gwSJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
